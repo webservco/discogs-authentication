@@ -1,29 +1,11 @@
-<!--
-This README is the template for every webservco component. Fill it in when you create a component from the skeleton.
-
-The clone workflow already replaces the skeleton name with the real one. Replace the _italic_ placeholders by hand, drop any (optional) section that doesn't apply, then delete this comment.
-
-Everything lives in this file, no docs folder. Around 100 lines is plenty, and when the reader needs more, link to the source file.
-
-The reader is wiring the component into an app by hand, the way the webservco/sandbox project does it. Use real class names for the component and put the interface in a comment above each object. Give app-specific classes generic names (`ExampleCommand`, not the sandbox's `ImportCommand`). When you mention the sandbox, write "the `webservco/sandbox` project". The only link to it is in the description.
-
-Keep the first description line (the general sentence and the sandbox link) as it is. On its own line below it, write one sentence about what the component does. For `description` in composer.json, use "A PHP component/library." followed by that sentence.
-
-Leave the version out of the install command. Composer picks the current major, while a hardcoded constraint goes stale.
--->
-
 # webservco/discogs-authentication
-
-> **Note:** This is a template for creating new components. Delete this note when implementing, and the hidden comment at the start of the file.
 
 A PHP component/library. Please see [webservco/sandbox](https://webservco.github.io/sandbox/) for an example project using these types of components.
 
-_What it does, in one sentence._
+Logs a user in with Discogs (OAuth 1.0a: request token, authorize URL, access token, identity) and builds the Authorization header of every Discogs API request.
 
-- Implements: _[PSR-N: Title](https://www.php-fig.org/psr/psr-N/)_ (optional)
-- Provides: _`psr/xxx-implementation`_ (optional)
-- Requires: _PHP extensions, external services, or setup (database table, config file)_ (optional)
-- Related: _`webservco/xxx` (how it relates)_ (optional)
+- Requires: a [Discogs application](https://www.discogs.com/settings/developers) (consumer key and secret), a [PSR-18](https://www.php-fig.org/psr/psr-18/) HTTP client and a [PSR-17](https://www.php-fig.org/psr/psr-17/) request factory
+- Related: `webservco/http-client` (a PSR-18 client), `webservco/http` (a PSR-17 factory), `webservco/data` (`StringString`, the header), `webservco/session` (keeps the request token until the callback)
 
 ---
 
@@ -37,49 +19,92 @@ composer require webservco/discogs-authentication
 
 ## Usage
 
-_Smallest working example for the common case. Usually that means getting an object from a factory and calling one method on it._
+### Login
 
 ```php
-use WebServCo\Component\Factory\ExampleFactory;
+use WebServCo\DiscogsAuthentication\Model\DataTransfer\ConsumerSettings;
+use WebServCo\DiscogsAuthentication\Model\DataTransfer\RequestSettings;
+use WebServCo\DiscogsAuthentication\Service\HandshakeService;
+use WebServCo\DiscogsAuthentication\Service\RequestSender;
 
-// \WebServCo\Component\Contract\ExampleInterface
-$factory = new ExampleFactory();
-$example = $factory->createExample();
-$result = $example->doSomething($input);
+// \WebServCo\DiscogsAuthentication\Contract\HandshakeServiceInterface
+$handshakeService = new HandshakeService(
+    // $httpClient: \Psr\Http\Client\ClientInterface, $requestFactory: \Psr\Http\Message\RequestFactoryInterface
+    new RequestSender($httpClient, $requestFactory, new RequestSettings('ExampleApplication/1.0 +https://example.com')),
+    new ConsumerSettings($consumerKey, $consumerSecret),
+);
+
+// The login page: a GET.
+$requestToken = $handshakeService->fetchRequestToken('https://example.com/account/callback');
+// Keep the request token on the server until the callback, eg. in the session. Then redirect the user.
+$authorizeUrl = $handshakeService->createAuthorizeUrl($requestToken);
 ```
 
-_Another common case? Give it its own `###` heading. Two extra examples at most._
+Discogs sends the user back to the callback URL:
+
+```php
+use WebServCo\DiscogsAuthentication\Model\DataTransfer\RequestToken;
+use WebServCo\DiscogsAuthentication\Service\CallbackReader;
+
+// \WebServCo\DiscogsAuthentication\Contract\CallbackReaderInterface
+$callbackReader = new CallbackReader();
+$queryParams = $request->getQueryParams();
+if ($callbackReader->isDenied($queryParams)) {
+    // The user refused: no login.
+}
+
+// The stored request token. Remove it from the session: it works once.
+$requestToken = new RequestToken($storedToken, $storedSecret);
+$verifier = $callbackReader->readVerifier($queryParams, $requestToken);
+// \WebServCo\DiscogsAuthentication\Model\DataTransfer\AccessToken: keep it for requests on behalf of the user.
+$accessToken = $handshakeService->fetchAccessToken($requestToken, $verifier);
+// \WebServCo\DiscogsAuthentication\Model\DataTransfer\Identity: the ID is the user's key, the username can change.
+$identity = $handshakeService->fetchIdentity($accessToken);
+```
+
+### Requests to the API
+
+```php
+use WebServCo\DiscogsAuthentication\Model\DataTransfer\OAuthSettings;
+use WebServCo\DiscogsAuthentication\Service\Authorization\OAuthService;
+
+// On behalf of a user. Or `ConsumerService` (the application), `PersonalService` (a personal access token).
+// \WebServCo\DiscogsAuthentication\Contract\AuthorizationServiceInterface
+$authorizationService = new OAuthService(
+    new OAuthSettings($consumerKey, $consumerSecret, $accessToken->token, $accessToken->secret),
+);
+// \WebServCo\Data\DataTransferObject\KeyValue\StringString
+$header = $authorizationService->createAuthorizationHeader();
+$request = $request->withHeader($header->key, $header->value);
+```
 
 ---
 
 ## Contracts
 
-_Interfaces an app would type-hint against, and the classes that implement them. Leave out internal ones._
-
 | Interface | Implementation | Purpose |
 | --- | --- | --- |
-| `Contract\ExampleInterface` | `Service\Example` | _What it does._ |
-| `Contract\ExampleFactoryInterface` | `Factory\ExampleFactory` | _Creates `ExampleInterface`._ |
+| `Contract\HandshakeServiceInterface` | `Service\HandshakeService` | Request token, authorize URL, access token, identity. |
+| `Contract\CallbackReaderInterface` | `Service\CallbackReader` | Reads the callback: a refusal, or the verifier of this login. |
+| `Contract\AuthorizationServiceInterface` | `Service\Authorization\ConsumerService`, `PersonalService`, `OAuthService` | The `Authorization` header of a request: the application, a personal access token, a user. |
 
-Namespaces are relative to `WebServCo\Component\`.
-
----
-
-## Configuration (optional)
-
-_Keys read from `config/.env.ini`, each with an example value._
-
-```ini
-[Component]
-
-EXAMPLE_KEY = 'value'
-```
+Namespaces are relative to `WebServCo\DiscogsAuthentication\`. Without a contract: `Service\RequestSender` (sends a request of the handshake), `Factory\OAuthHeaderFactory`, `Service\ResponseParser`, `Service\HeaderValueValidator`.
 
 ---
 
-## Notes (optional)
+## Notes
 
-_Anything that surprised you while using it, such as limitations, gotchas or workarounds._
+From real responses, captured in 2026-11 (`tests/Unit/Assets/Responses/`).
+
+- **Errors.** The fetch methods throw `Exception\AuthenticationException`: no response, another status than 200, or a response without a valid value. Its code is the HTTP status (`401`, `429`), or `0`. Its message names the endpoint and has Discogs' text, never a credential.
+- **The header.** Values go in double quotes, not percent-encoded, as the Discogs documentation shows them. A value that can't be sent that way unchanged (empty, a space, a double quote, a backslash, a character outside ASCII) is refused: `InvalidArgumentException` for a callback URL, `AuthenticationException` for a value from Discogs or the callback.
+- **Callback URL.** Give the application on Discogs no callback URL: each environment sends its own with the request token, and Discogs confirms it (`oauth_callback_confirmed=true`, checked).
+- **Token responses.** The values come in the body, form-encoded, not in headers. An error is a 401 with a plain text body (`Invalid consumer.`, `Invalid signature.`), not the documented 400.
+- **Access token.** Signed with the consumer secret and the request token secret, as OAuth 1.0a says. The documentation signs it with the consumer secret only.
+- **A request token** expires 15 minutes after it is issued, and works once: a second access token request gets `401 Invalid request token`.
+- **Refusal.** Discogs sends the user to the callback with only `denied=<request token>`.
+- **Rate limit.** A login sends three requests. Discogs counted every request from one IP once, whatever the application or token: another application on the same server shares the count.
+- **Content Security Policy.** A `form-action` directive also applies to the redirects after a form, so a login started by a POST form can't redirect to the authorize URL. Start it with a GET link, or allow `https://www.discogs.com`.
 
 ---
 
@@ -92,8 +117,8 @@ ddev start
 ddev c u
 # Run all validations.
 ddev c c
-# Run unit tests.
-ddev c test:dox
+# Run unit tests, with coverage (needs Xdebug, which DDEV leaves off).
+ddev xdebug on && ddev c test:dox; ddev xdebug off
 ```
 
 ---

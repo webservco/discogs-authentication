@@ -1,0 +1,22 @@
+HTTP/2 401 
+date: Wed, 18 Nov 2026 18:59:38 GMT
+content-type: application/json
+content-length: 60
+access-control-allow-headers: Content-Type, authorization, User-Agent, Private-Auth-Secret, Discogs-UID
+access-control-allow-methods: HEAD,OPTIONS,GET,OPTIONS
+access-control-allow-origin: *
+access-control-expose-headers: Location
+content-language: en
+strict-transport-security: max-age=15552000
+x-content-type-options: nosniff
+x-discogs-media-type: discogs.v2
+x-discogs-ratelimit: 25
+x-discogs-ratelimit-remaining: 22
+x-discogs-ratelimit-used: 3
+x-frame-options: SAMEORIGIN
+x-xss-protection: 1; mode=block
+cf-cache-status: DYNAMIC
+server: cloudflare
+cf-ray: a5c936a34a9ac1cd-BUD
+alt-svc: h3=":443"; ma=86400
+

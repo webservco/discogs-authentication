@@ -20,7 +20,7 @@
             "dealerdirect/phpcodesniffer-composer-installer": true
         }
     },
-    "description" : "A PHP component/library.",
+    "description" : "A PHP component/library. Logs a user in with Discogs (OAuth 1.0a: request token, authorize URL, access token, identity) and builds the Authorization header of every Discogs API request.",
     "homepage" : "https://webserv.co",
     "keywords" : [
         "component",
@@ -29,7 +29,12 @@
     "license" : "MIT",
     "name" : "webservco/discogs-authentication",
     "require": {
-        "php" : "^8.4"
+        "php" : "^8.4",
+        "fig/http-message-util": "^1",
+        "psr/http-client": "^1",
+        "psr/http-factory": "^1",
+        "psr/http-message": "^2",
+        "webservco/data": "^2"
     },
     "require-dev": {
         "pds/skeleton": "^1",
@@ -46,7 +51,9 @@
         "squizlabs/php_codesniffer" : "^4",
         "vimeo/psalm": "^6",
         "webservco/coding-standards": "^2",
-        "webservco/component-common": "^2"
+        "webservco/component-common": "^2",
+        "webservco/http": "^2",
+        "webservco/http-response-service": "^2"
     },
     "scripts": {
         "check:lint": "vendor/bin/parallel-lint bin config public resources src tests",
