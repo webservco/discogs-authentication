@@ -27,7 +27,7 @@
         "webservco"
     ],
     "license" : "MIT",
-    "name" : "webservco/component-skeleton",
+    "name" : "webservco/discogs-authentication",
     "require": {
         "php" : "^8.4"
     },
